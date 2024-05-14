@@ -1,0 +1,49 @@
+name: Generate static data
+
+on:
+  schedule:
+    cron: "52 */4 * * *"
+  workflow_dispatch:
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: install deps
+        run: |
+          apt -qqq update
+          apt -qqq install \
+            cpanminus \
+            libdatetime-perl \
+            libdevel-confess-perl \
+            libjson-xs-perl \
+            liblwp-protocol-https-perl \
+            libtest-exception-perl \
+            libtext-csv-xs-perl \
+            libxml-libxml-perl \
+            libyaml-perl
+          cpanm -qn Data::Mirror Object::Anon
+
+      - name: generate data
+        run: |
+          mkdir -p data/root data/registrars
+          bin/registrars.pl data/registrars
+          bin/root.pl data/root
+
+      - name: generate artifact
+        run: tar --directory=data -z -c -v -f github-pages .
+
+      - name: configure
+        uses: actions/configure-pages@v4
+
+      - name: upload
+        uses: actions/upload-pages-artifact@v3
+
+      - name: deploy
+        uses: actions/deploy-pages@v4
