@@ -28,7 +28,7 @@ jobs:
             libtext-csv-xs-perl \
             libxml-libxml-perl \
             libyaml-perl
-          cpanm -qn Data::Mirror Object::Anon
+          cpanm --sudo -qn Data::Mirror Object::Anon
 
       - name: generate data
         run: |
