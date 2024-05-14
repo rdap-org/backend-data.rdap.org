@@ -32,15 +32,9 @@ jobs:
 
       - name: generate data
         run: |
-          mkdir -p data/root data/registrars
-          bin/registrars.pl data/registrars
-          bin/root.pl data/root
-
-      - name: generate artifact
-        run: tar --directory=data -z -c -v -f github-pages .
-
-      - name: upload to file.io
-        run: curl -s -F 'file=@github-pages' https://file.io | jq .
+          mkdir -p _site/root _site/registrars
+          bin/registrars.pl _site/registrars
+          bin/root.pl _site/root
 
       - name: configure
         uses: actions/configure-pages@v4
