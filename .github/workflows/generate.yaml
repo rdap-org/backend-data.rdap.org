@@ -2,7 +2,7 @@ name: Generate static data
 
 on:
   schedule:
-    cron: "52 */4 * * *"
+    - cron: "52 */4 * * *"
   workflow_dispatch:
 
 env:
