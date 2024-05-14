@@ -17,8 +17,8 @@ jobs:
 
       - name: install deps
         run: |
-          apt -qqq update
-          apt -qqq install \
+          sudo apt -qqq update
+          sudo apt -qqq install \
             cpanminus \
             libdatetime-perl \
             libdevel-confess-perl \
