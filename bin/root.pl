@@ -2,6 +2,7 @@
 use Cwd;
 use Data::Mirror qw(mirror_fh mirror_json);
 use DateTime;
+use Encode qw(encode decode);
 use File::Slurp;
 use File::stat;
 use IO::Socket;
@@ -144,14 +145,14 @@ sub process_tld {
 
     my $data;
     if (-e $jfile && stat($jfile) >= time() - TTL_SECS) {
-        my @data = read_file($jfile);
+        my @data = read_file($jfile, { 'binmode' => ':utf8' });
         $data = $json->decode(join('', @data));
 
     } else {
         my @data;
 
         if (-e $file && stat($file)->mtime >= time() - TTL_SECS) {
-            @data = read_file($file);
+            @data = read_file($file, { 'binmode' => ':utf8' });
 
         } else {
             my $socket;
@@ -182,7 +183,7 @@ sub process_tld {
             } else {
                 $socket->print(sprintf("%s\r\n", $tld));
 
-                @data = $socket->getlines;
+                @data = map { decode('UTF-8', $_) } $socket->getlines;
 
                 $socket->close;
 
@@ -326,8 +327,8 @@ sub process_tld {
 
                 } elsif ('contact' eq $key) {
                     #
-                    # signifies the start of a new contact, so change the value of
-                    # $contact and initialise a new object in $entities
+                    # signifies the start of a new contact, so change the value
+                    # of $contact and initialise a new object in $entities
                     #
                     $contact = $value;
                     $entities->{$contact} = {
@@ -483,7 +484,7 @@ sub process_tld {
         #
         # write RDAP object to disk
         #
-        if (!write_file($jfile, {'binmode' => ':utf8'}, $json->encode($data))) {
+        if (!write_file($jfile, $json->encode($data))) {
             printf(STDERR "Unable to write to '%s': %s\n", $jfile, $!);
             next;
         }
