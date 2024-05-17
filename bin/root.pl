@@ -156,13 +156,13 @@ sub process_tld {
 
         } else {
             my $socket;
-            TRY: for (my $i = 0 ; $i < 3 ; $i++) {
+            TRY: for (my $i = 0 ; $i < 10 ; $i++) {
                 $socket = IO::Socket::INET->new(
                     'PeerAddr'  => WHOIS_HOST,
                     'PeerPort'  => WHOIS_PORT,
                     'Type'      => SOCK_STREAM,
                     'Proto'     => 'tcp',
-                    'Timeout'   => 5,
+                    'Timeout'   => 10,
                 );
 
                 if ($socket) {
