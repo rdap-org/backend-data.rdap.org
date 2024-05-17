@@ -112,7 +112,8 @@ foreach my $thread (threads->list) {
     }
 }
 
-say STDERR 'RDAP records generated, writing TLD search result file...';
+printf(STDERR "Generated %u RDAP records for %u TLDs, writing search result file...\n",
+    scalar(@{$all->{'domainSearchResults'}}), $i);
 
 #
 # write RDAP object to disk
