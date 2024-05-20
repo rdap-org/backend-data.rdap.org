@@ -37,7 +37,7 @@ jobs:
         run: |
           mkdir -p _site/root _site/registrars
           bin/registrars.pl _site/registrars
-          bin/root.pl _site/root
+          bin/root.pl > _site/root/_all.json
 
       - name: configure
         uses: actions/configure-pages@v4
