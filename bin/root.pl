@@ -24,7 +24,7 @@ use utf8;
 use strict;
 
 $Data::Mirror::UA->timeout(TIMEOUT);
-$Data::Mirror::UA->agent('https://github.com/gbxyz/rdap-data-sources');
+$Data::Mirror::UA->agent('https://github.com/rdap-org/backend-data.rdap.org');
 $Data::Mirror::UA->conn_cache(LWP::ConnCache->new);
 
 say STDERR 'updating root zone RDAP data...';
