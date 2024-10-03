@@ -1,4 +1,4 @@
-#!perl
+#!/usr/bin/perl
 use Data::Mirror qw(mirror_str mirror_json mirror_file);
 use Data::Tranco;
 use Domain::PublicSuffix;
