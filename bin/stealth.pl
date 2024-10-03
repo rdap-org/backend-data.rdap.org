@@ -70,7 +70,7 @@ $CHECKED = {};
 
 say STDERR 'checking TLDs...';
 
-foreach my $tld (grep { !exists($exclude->{$_}) } @TLDs) {
+foreach my $tld (grep { !exists($EXCLUDE->{$_}) } @TLDs) {
     check_tld($tld);
 }
 
