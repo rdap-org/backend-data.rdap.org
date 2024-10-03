@@ -44,6 +44,9 @@ $KNOWN = {
 
 say STDERR 'running...';
 
+say STDERR 'updating Tranco list...';
+Data::Tranco->update_db
+
 say STDERR 'mirroring PSL...';
 $PSL = Domain::PublicSuffix->new({ data_file => mirror_file(PSL_URL) });
 
