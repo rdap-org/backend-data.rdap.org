@@ -17,7 +17,7 @@ use constant {
 use feature qw(say);
 use strict;
 use open qw(:encoding(utf8));
-use vars qw($KNOWN @PATHS $PSL @TLDs $IANA $INFO $EXCLUDE $CHECKED);
+use vars qw($KNOWN @PATHS $PSL @TLDs $IANA $INFO $EXCLUDE);
 use warnings;
 
 $| = 1;
@@ -65,11 +65,6 @@ foreach my $service (@{ mirror_json(RDAP_URL)->{services} }) {
         $EXCLUDE->{$tld} = 1;
     }
 }
-
-#
-# this will remember servers which we know are not RDAP servers
-#
-$CHECKED = {};
 
 say STDERR 'checking TLDs...';
 
@@ -147,7 +142,7 @@ sub check_tld {
         }
     );
 
-    foreach my $host (grep { !exists($CHECKED->{$_}) } map { lc } @hosts) {
+    foreach my $host (map { lc } @hosts) {
         foreach my $path (@paths) {
             $path =~ s/\/+/\//g;
 
@@ -162,8 +157,5 @@ sub check_tld {
                 return;
             }
         }
-
-        say STDERR sprintf('%s is not an RDAP server', $host);
-        $CHECKED->{$host} = 1;
     }
 }
