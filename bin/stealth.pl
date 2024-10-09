@@ -35,6 +35,7 @@ $KNOWN = {
     'sb' => 'rdap.nic.sb',
     'ml' => 'rdap.nic.ml',
     'ke' => 'whois.kenic.or.ke',
+    'gov' => 'rdap.cloudflareregistry.com',
 };
 
 #
