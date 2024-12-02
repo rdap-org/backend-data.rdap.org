@@ -101,8 +101,9 @@ foreach my $rar (sort { $a->{'ianaNumber'} <=> $b->{'ianaNumber'} } @{$rars}) {
 	if ($rar->{'url'}) {
 		push(@{$data->{'links'}}, {
 			'title' => "Registrar's Website",
-			'rel' => 'related',
-			'href' => $rar->{'url'}
+			'rel'   => 'related',
+			'value' => $rar->{'url'},
+			'href'  => $rar->{'url'},
 		});
 	}
 
@@ -119,6 +120,7 @@ foreach my $rar (sort { $a->{'ianaNumber'} <=> $b->{'ianaNumber'} } @{$rars}) {
 	push(@{$data->{'links'}}, {
 		'title'	=> 'About RDAP',
 		'rel'	=> 'related',
+		'value'	=> 'https://about.rdap.org',
 		'href'	=> 'https://about.rdap.org',
 	});
 
