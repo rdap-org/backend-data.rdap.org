@@ -69,6 +69,7 @@ foreach my $rar (sort { $a->{'ianaNumber'} <=> $b->{'ianaNumber'} } @{$rars}) {
 	my $data = {
 		'objectClassName' => 'entity',
 		'handle' => sprintf('%s-iana', $id),
+        'roles' => [],
 		'publicIds' => [ { 'type' => 'IANA Registrar ID', 'identifier' => sprintf("%u", $id) }],
 		'rdapConformance' => [ 'rdap_level_0' ],
 		'status' => [ 'active' ],
