@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 use Cwd;
-use Data::Mirror qw(mirror_file);
+use Data::Mirror qw(mirror_file mirror_csv);
 use DateTime;
 use Encode;
 use File::Slurp;
@@ -78,7 +78,18 @@ if (scalar(@{$rars}) < 1) {
     exit(1);
 }
 
-my $rars = $object->{'accredited-registrars-{"languageTag":"en","siteLanguageTag":"en","slug":"accredited-registrars"}'}->{'data'}->{'accreditedRegistrarsOperations'}->{'registrars'};
+say STDERR 'retrieving IANA registry...';
+my $urls = {};
+eval {
+    my $rows = mirror_csv('https://www.iana.org/assignments/registrar-ids/registrar-ids-1.csv');
+
+    shift(@{$rows});
+    foreach my $row (@{$rows}) {
+        $urls->{$row->[0]} = $row->[3];
+    }
+};
+
+die($@) if ($@);
 
 say STDERR 'generating RDAP records for registrars...';
 
@@ -126,6 +137,15 @@ foreach my $rar (sort { $a->{'ianaNumber'} <=> $b->{'ianaNumber'} } @{$rars}) {
 			'href'  => $rar->{'url'},
 		});
 	}
+
+    if ($urls->{$id}) {
+		push(@{$data->{'links'}}, {
+			'title' => "Registrar's RDAP Base URL",
+			'rel'   => 'related',
+			'value' => $urls->{$id},
+			'href'  => $urls->{$id},
+		});
+    }
 
 	$data->{'notices'} = [ $NOTICE ];
 
