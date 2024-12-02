@@ -40,7 +40,14 @@ my $all = {
   'entitySearchResults' => [],
 };
 
-my $file = mirror_file('https://www.icann.org/en/accredited-registrars');
+my $file;
+
+eval {
+    $file = mirror_file('https://www.icann.org/en/accredited-registrars');
+};
+
+die($@) if ($@);
+
 say STDERR 'retrieved registrar list, attempting to parse';
 
 my $doc = XML::LibXML->load_html(
@@ -54,10 +61,22 @@ my $doc = XML::LibXML->load_html(
 );
 
 say STDERR 'searching for embedded JSON...';
-my $data = (grep { 'ng-state' eq $_->getAttribute('id') && 'application/json' eq $_->getAttribute('type') } $doc->getElementsByTagName('script'))[0]->childNodes->item(0)->data;
-$data =~ s/\&q;/"/g;
+my $rars;
+eval {
+    my $data = (grep { 'ng-state' eq $_->getAttribute('id') && 'application/json' eq $_->getAttribute('type') } $doc->getElementsByTagName('script'))[0]->childNodes->item(0)->data;
+    $data =~ s/\&q;/"/g;
 
-my $object = $json->decode(Encode::encode_utf8($data));
+    my $object = $json->decode(Encode::encode_utf8($data));
+
+    $rars = $object->{'accredited-registrars-{"languageTag":"en","siteLanguageTag":"en","slug":"accredited-registrars"}'}->{'data'}->{'accreditedRegistrarsOperations'}->{'registrars'};
+};
+
+die($@) if ($@);
+
+if (scalar(@{$rars}) < 1) {
+    say STDERR 'no registrars found, the page format may have changed...';
+    exit(1);
+}
 
 my $rars = $object->{'accredited-registrars-{"languageTag":"en","siteLanguageTag":"en","slug":"accredited-registrars"}'}->{'data'}->{'accreditedRegistrarsOperations'}->{'registrars'};
 
