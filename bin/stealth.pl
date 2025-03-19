@@ -17,7 +17,7 @@ use constant {
 use feature qw(say);
 use strict;
 use open qw(:encoding(utf8));
-use vars qw($KNOWN @PATHS $PSL @TLDs $IANA $INFO $EXCLUDE);
+use vars qw($KNOWN $KNOWN_URLS @PATHS $PSL @TLDs $IANA $INFO $EXCLUDE);
 use warnings;
 
 $| = 1;
@@ -36,8 +36,10 @@ $KNOWN = {
     'ml' => 'rdap.nic.ml',
     'ke' => 'whois.kenic.or.ke',
     'gov' => 'rdap.cloudflareregistry.com',
+};
 
-    # reported by @notpushkin, see https://gist.github.com/notpushkin/6220d8efa5899dbb0dcff1b9ccf729d4
+# reported by @notpushkin, see https://gist.github.com/notpushkin/6220d8efa5899dbb0dcff1b9ccf729d4
+$KNOWN_URLS = {
     "ac" => "https://rdap.identitydigital.services/rdap/",
     "ae" => "https://rdap.nic.ae/", # works but no data
     "ag" => "https://rdap.identitydigital.services/rdap/",
@@ -123,56 +125,67 @@ sub check_tld {
     my $tld = shift;
     say STDERR sprintf('checking .%s...', uc($tld));
 
-    #
-    # this will contain a list of hosts
-    #
-    my @hosts;
+    my $domain = [ Data::Tranco->top_domain($tld) ]->[0];
 
-    push(@hosts, $KNOWN->{$tld}) if (exists($KNOWN->{$tld}));
+    my @urls;
 
-    #
-    # this will be populated with any domain name found
-    # in the TLD's RDAP record
-    #
-    my @domains;
-
-    if (!exists($INFO->{$tld})) {
-        say STDERR sprintf('missing info for .%s!', uc($tld));
-        return;
-    }
-
-    my $rdap = $INFO->{$tld};
-
-    #
-    # extract domains from related links
-    #
-    foreach my $link (grep { 'related' eq $_->rel } $rdap->links) {
-        push (@domains, $PSL->get_root_domain($link->href->host));
-    }
-
-    #
-    # extract domains from entity email addresses
-    #
-    foreach my $email (map { $_->{address} } map { @{$_->vcard->email_addresses} } $rdap->entities) {
-        push(@domains, $PSL->get_root_domain(Email::Address::XS->parse($email)->host));
-    }
-
-    #
-    # generate a list of hosts from the list of domains
-    #
-    @hosts = uniq(map { 'rdap.'.$_ } (grep { defined } @domains, $tld));
-
-    push(@hosts, $rdap->port43) if ($rdap->port43);
-
-    my ($domain, undef) = Data::Tranco->top_domain($tld);
-
-    my @paths;
-    if ($domain) {
-        @paths = map { $_.'/domain/'.$domain } ('/'.$tld, @PATHS);
+    if (exists($KNOWN_URLS->{$tld})) {
+        say STDERR sprintf('.%s has a known URL (%s)', uc($tld), $KNOWN_URLS->{$tld});
+        push(@urls, URI->new($KNOWN_URLS->{$tld}));
 
     } else {
-        @paths = map { $_.'/help '} ('/'.$tld, @PATHS);
+        #
+        # this will contain a list of hosts
+        #
+        my @hosts;
 
+        if (exists($KNOWN->{$tld})) {
+            say STDERR sprintf('.%s has a known RDAP server (%s)', uc($tld), $KNOWN->{$tld});
+            push(@hosts, $KNOWN->{$tld});
+
+        } else {
+            #
+            # this will be populated with any domain name found
+            # in the TLD's RDAP record
+            #
+            my @domains;
+
+            if (!exists($INFO->{$tld})) {
+                say STDERR sprintf('missing info for .%s!', uc($tld));
+                return;
+            }
+
+            my $rdap = $INFO->{$tld};
+
+            #
+            # extract domains from related links
+            #
+            foreach my $link (grep { 'related' eq $_->rel } $rdap->links) {
+                push (@domains, $PSL->get_root_domain($link->href->host));
+            }
+
+            #
+            # extract domains from entity email addresses
+            #
+            foreach my $email (map { $_->{address} } map { @{$_->vcard->email_addresses} } $rdap->entities) {
+                push(@domains, $PSL->get_root_domain(Email::Address::XS->parse($email)->host));
+            }
+
+            #
+            # generate a list of hosts from the list of domains
+            #
+            @hosts = uniq(map { 'rdap.'.$_ } (grep { defined } @domains, $tld));
+
+            push(@hosts, $rdap->port43) if ($rdap->port43);
+        }
+
+        foreach my $host (map { lc } @hosts) {
+            foreach my $path (@PATHS) {
+                $path =~ s/\/+/\//g;
+
+                push(@urls, URI->new(q{https://}.$host.$path)->canonical);
+            }
+        }
     }
 
     my $ua = LWP::UserAgent->new(
@@ -185,20 +198,17 @@ sub check_tld {
         }
     );
 
-    foreach my $host (map { lc } @hosts) {
-        foreach my $path (@paths) {
-            $path =~ s/\/+/\//g;
+    foreach my $url (@urls) {
+        $url->path_segments(grep { length > 0 } $url->path_segments, $domain ? (q{domain}, $domain) : q{help});
 
-            my $url = URI->new(q{https://}.$host.$path)->canonical;
+        say STDERR sprintf('checking %s...', $url);
+        my $result = $ua->request(GET($url, connection => 'close'));
 
-            my $result = $ua->request(GET($url, connection => 'close'));
+        if (200 == $result->code && $result->header('content-type') =~ /^application\/(rdap\+?)json/i) {
+            say STDERR sprintf('%s returned an RDAP response!', $url);
+            say STDOUT $tld;
 
-            if (200 == $result->code && $result->header('content-type') =~ m!^application/(rdap\+|)json!i) {
-                say STDERR sprintf('%s is an RDAP server!', $host);
-                say STDOUT $tld;
-
-                return;
-            }
+            return;
         }
     }
 }
