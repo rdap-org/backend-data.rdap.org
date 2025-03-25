@@ -89,9 +89,6 @@ $KNOWN_URLS = {
 
 say STDERR 'running...';
 
-say STDERR 'updating Tranco list...';
-Data::Tranco->update_db;
-
 say STDERR 'mirroring PSL...';
 $PSL = Domain::PublicSuffix->new({ data_file => mirror_file(PSL_URL) });
 
@@ -190,7 +187,7 @@ sub check_tld {
 
     my $ua = LWP::UserAgent->new(
         user_agent => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:128.0) Gecko/20100101 Firefox/128.0',
-        timeout => 1,
+        timeout => 3,
         ssl_opts => {
             # for the purposes of this survey, we don't care about
             # whether the server has a valid TLS certificate
@@ -204,7 +201,9 @@ sub check_tld {
         say STDERR sprintf('checking %s...', $url);
         my $result = $ua->request(GET($url, connection => 'close'));
 
-        if (200 == $result->code && $result->header('content-type') =~ /^application\/(rdap\+?)json/i) {
+        say STDERR $result->status_line;
+
+        if (200 == $result->code && $result->header('content-type') =~ /^application\/(rdap\+)?json/i) {
             say STDERR sprintf('%s returned an RDAP response!', $url);
             say STDOUT $tld;
 
