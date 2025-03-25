@@ -201,8 +201,6 @@ sub check_tld {
         say STDERR sprintf('checking %s...', $url);
         my $result = $ua->request(GET($url, connection => 'close'));
 
-        say STDERR $result->status_line;
-
         if (200 == $result->code && $result->header('content-type') =~ /^application\/(rdap\+)?json/i) {
             say STDERR sprintf('%s returned an RDAP response!', $url);
             say STDOUT $tld;
