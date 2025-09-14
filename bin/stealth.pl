@@ -80,6 +80,8 @@ $KNOWN_URLS = {
     "vu" => "https://rdap.dnrs.vu/",
     "ws" => "https://rdap.website.ws/",
     "arpa" => "https://rdap.iana.org/",
+    "ru" => "https://cctld.ru/tci-ripn-rdap/",
+    "xn--p1ai" => "https://cctld.ru/tci-ripn-rdap/",
 };
 
 #
