@@ -1,0 +1,6 @@
+services:
+  generate:
+    build: .
+    volumes:
+      - .:/app
+    command: /app/bin/build.sh

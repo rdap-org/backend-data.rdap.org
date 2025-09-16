@@ -21,26 +21,8 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
 
-      - name: install deps
-        run: |
-          sudo apt -qqq update
-          sudo apt -qqq install \
-            cpanminus \
-            libdatetime-perl \
-            libdevel-confess-perl \
-            libjson-xs-perl \
-            liblwp-protocol-https-perl \
-            libtest-exception-perl \
-            libtext-csv-xs-perl \
-            libxml-libxml-perl \
-            libyaml-perl
-          cpanm --sudo -qn Data::Mirror Object::Anon
-
       - name: generate data
-        run: |
-          mkdir -p _site/root _site/registrars
-          bin/registrars.pl _site/registrars
-          bin/root.pl > _site/root/_all.json
+        run: docker compose run generate
 
       - name: configure
         uses: actions/configure-pages@v4
