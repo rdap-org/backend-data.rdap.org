@@ -4,6 +4,7 @@ use Data::Mirror qw(mirror_file mirror_csv);
 use DateTime;
 use Encode;
 use File::Slurp;
+use HTML5::DOM;
 use JSON::XS;
 use open qw(:utf8);
 use feature qw(say);
@@ -43,32 +44,27 @@ my $all = {
 my $file;
 
 eval {
-    $file = mirror_file('https://www.icann.org/en/accredited-registrars');
+    $file = mirror_file('https://www.icann.org/en/contracted-parties/accredited-registrars/list-of-accredited-registrars');
 };
 
 die($@) if ($@);
 
 say STDERR 'retrieved registrar list, attempting to parse';
 
-my $doc = XML::LibXML->load_html(
-    'location'          => $file,
-    'suppress_warnings' => 1,
-    'recover'           => 2,
-    'huge'              => 1,
-    'encoding'          => 'UTF-8',
-    'no_blanks'         => 1,   
-    'no_cdata'          => 1,
-);
+my $parser = HTML5::DOM->new;
+
+my $doc = $parser->parse(join('', read_file($file)));
 
 say STDERR 'searching for embedded JSON...';
+
 my $rars;
 eval {
-    my $data = (grep { 'ng-state' eq $_->getAttribute('id') && 'application/json' eq $_->getAttribute('type') } $doc->getElementsByTagName('script'))[0]->childNodes->item(0)->data;
+    my $data = [grep { 'ng-state' eq $_->attr('id') && 'application/json' eq $_->attr('type') } @{$doc->getElementsByTagName('script')}]->[0]->textContent;
     $data =~ s/\&q;/"/g;
 
     my $object = $json->decode(Encode::encode_utf8($data));
 
-    $rars = $object->{'accredited-registrars-{"languageTag":"en","siteLanguageTag":"en","slug":"accredited-registrars"}'}->{'data'}->{'accreditedRegistrarsOperations'}->{'registrars'};
+    $rars = $object->{'accredited-registrars-{"languageTag":"en","siteLanguageTag":"en","slug":"contracted-parties/accredited-registrars/list-of-accredited-registrars"}'}->{'data'}->{'accreditedRegistrarsOperations'}->{'registrars'};
 };
 
 die($@) if ($@);
