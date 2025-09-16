@@ -166,7 +166,7 @@ sub check_tld {
             #
             # extract domains from entity email addresses
             #
-            foreach my $email (map { $_->{address} } map { @{$_->jcard->properties('email')->value } } $rdap->entities) {
+            foreach my $email (map { $_->value } map { @{$_->jcard->properties('email') } } $rdap->entities) {
                 push(@domains, $PSL->get_root_domain(Email::Address::XS->parse($email)->host));
             }
 
