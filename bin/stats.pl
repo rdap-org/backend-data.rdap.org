@@ -13,7 +13,7 @@ if (!flock(DATA, LOCK_EX | LOCK_NB)) {
     flock(DATA, LOCK_EX);
 }
 
-@SERIES = qw(status type user_agent network);
+@SERIES = qw(status type user_agent network tld);
 
 say STDERR q{opening database connection...};
 my $DB = DBI->connect(sprintf(
