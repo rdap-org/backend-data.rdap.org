@@ -1,11 +1,16 @@
 #!/usr/bin/env perl
+use Data::Printer;
 use DBI;
 use Fcntl qw(:flock);
-use HTTP::Request::Common qw(GET DELETE);
+use HTTP::Request::Common qw(GET DELETE POST);
 use JSON::XS;
 use LWP::UserAgent;
-use constant URL => q{https://rdap.org/stats};
-use vars qw(@SERIES $DB);
+use constant {
+    STATS_URL               => q{https://rdap.org/stats},
+    ALERTABLE_QUERY_RATE    => 50,
+    PUSHOVER_URL            => q{https://api.pushover.net/1/messages.json},
+};
+use vars qw(@SERIES $DB $UA);
 use common::sense;
 
 if (!flock(DATA, LOCK_EX | LOCK_NB)) {
@@ -21,10 +26,10 @@ my $DB = DBI->connect(sprintf(
     $ARGV[0] || q{./stats.db}
 ));
 
-$DB->do(q{CREATE TABLE IF NOT EXISTS total_queries (
-    id          INTEGER PRIMARY KEY,
-    timestamp   INTEGER UNIQUE,
-    count       INTEGER
+$DB->do(q{CREATE TABLE IF NOT EXISTS `total_queries` (
+    `id`        INTEGER PRIMARY KEY,
+    `timestamp` INTEGER UNIQUE,
+    `count`     INTEGER
 )});
 
 foreach my $column (@SERIES) {
@@ -43,29 +48,29 @@ foreach my $column (@SERIES) {
     ));
 }
 
-my $ua = LWP::UserAgent->new;
+$UA = LWP::UserAgent->new;
 
 #
 # 1. get current stats
 #
 
-my $req1 = GET(URL);
+my $req1 = GET(STATS_URL);
 $req1->header(authorization => sprintf(q{Bearer %s}, $ENV{STATS_TOKEN}));
 
 say STDERR q{getting stats...};
 
-my $res1 = $ua->request($req1);
+my $res1 = $UA->request($req1);
 
 die($res1->status_line) unless ($res1->is_success);
 
 #
 # 2. clear stats
 #
-my $req2 = DELETE(URL);
+my $req2 = DELETE(STATS_URL);
 $req2->header(authorization => sprintf(q{Bearer %s}, $ENV{STATS_TOKEN}));
 
 say STDERR q{purging stats...};
-my $res2 = $ua->request($req2);
+my $res2 = $UA->request($req2);
 
 die($res2->status_line) unless ($res2->is_success);
 
@@ -108,6 +113,49 @@ foreach my $column (@SERIES) {
             $stats->{$key}->{$value},
         );
     }
+}
+
+say STDERR q{running checks...};
+
+my $sth = $DB->prepare(q{SELECT * FROM `total_queries` ORDER BY `timestamp` DESC LIMIT 0,3});
+$sth->execute;
+
+my $r2 = $sth->fetchrow_hashref;
+my $r1 = $sth->fetchrow_hashref;
+my $r0 = $sth->fetchrow_hashref;
+
+my $curr_rate = $r2->{count} / ($r2->{timestamp} - $r1->{timestamp});
+my $prev_rate = $r1->{count} / ($r1->{timestamp} - $r0->{timestamp});
+
+printf(STDERR qq{query rate is %.1fqps (previously %.1fqps)\n}, $curr_rate, $prev_rate);
+
+my $alert;
+
+if ($curr_rate >= ALERTABLE_QUERY_RATE || $prev_rate >= ALERTABLE_QUERY_RATE) {
+    $alert = {
+        title   => sprintf(q{RDAP.ORG query rate exceeds %uqps}, ALERTABLE_QUERY_RATE),
+        message => sprintf(q{As of %s, the query rate is %.1fqps (previously %.1fs).}, scalar(gmtime($r1->{timestamp})), $curr_rate, $prev_rate),
+    };
+
+} elsif ($curr_rate <= ALERTABLE_QUERY_RATE && $prev_rate >= ALERTABLE_QUERY_RATE) {
+    $alert = {
+        title   => sprintf(q{RDAP.ORG query rate below %uqps}, ALERTABLE_QUERY_RATE),
+        message => sprintf(q{As of %s, the query rate is now %.1fqps (previously %.1fs).}, scalar(gmtime($r1->{timestamp})), $curr_rate, $prev_rate),
+    };
+
+}
+
+if ($alert) {
+    say STDERR q{sending notification...};
+
+    my $res = $UA->request(POST(PUSHOVER_URL, Content => {
+        token   => $ENV{PUSHOVER_APP_TOKEN},
+        user    => $ENV{PUSHOVER_USER_TOKEN},
+        url     => q{https://stats.rdap.org/private},
+        %{$alert},
+    }));
+
+    exit(1) unless ($res->is_success);
 }
 
 say STDERR q{done};
