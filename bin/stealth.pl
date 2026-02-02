@@ -72,6 +72,7 @@ $KNOWN_URLS = {
     "sh" => "https://rdap.identitydigital.services/rdap/",
     "sn" => "https://rdap.nic.sn/",
     "so" => "https://rdap.nic.so/",
+    "sk" => "https://rdap.sk-nic.sk/sk/",
     "td" => "https://rdap.nic.td/",
     "tl" => "https://rdap.nic.tl/",
     "us" => "https://rdap.nic.us/",
