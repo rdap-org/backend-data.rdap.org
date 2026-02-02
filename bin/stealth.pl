@@ -35,7 +35,6 @@ $KNOWN = {
     'sb' => 'rdap.nic.sb',
     'ml' => 'rdap.nic.ml',
     'ke' => 'whois.kenic.or.ke',
-    'gov' => 'rdap.cloudflareregistry.com',
 };
 
 # reported by @notpushkin, see https://gist.github.com/notpushkin/6220d8efa5899dbb0dcff1b9ccf729d4
@@ -64,7 +63,6 @@ $KNOWN_URLS = {
     "mr" => "https://rdap.nic.mr/",
     "my" => "https://rdap.mynic.my/rdap/",
     "mz" => "https://rdap.nic.mz/",
-    "ng" => "https://rdap.nic.net.ng/",
     "om" => "https://rdap.registry.om/",
     "pr" => "https://rdap.identitydigital.services/rdap/",
     "py" => "https://rdap.nic.py/",
