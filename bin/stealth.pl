@@ -3,10 +3,12 @@ use Data::Mirror qw(mirror_str mirror_json mirror_file);
 use Data::Tranco;
 use Domain::PublicSuffix;
 use Email::Address::XS;
+use Getopt::Long;
 use HTTP::Request::Common;
 use LWP::UserAgent;
 use List::Util qw(uniq);
 use Net::RDAP;
+use Storable qw(dclone);
 use URI;
 use constant {
     PSL_URL     => 'https://publicsuffix.org/list/public_suffix_list.dat',
@@ -17,8 +19,10 @@ use constant {
 use feature qw(say);
 use strict;
 use open qw(:encoding(utf8));
-use vars qw($KNOWN $KNOWN_URLS @PATHS $PSL @TLDs $IANA $INFO $EXCLUDE);
+use vars qw($KNOWN $KNOWN_URLS @PATHS $PSL @TLDs $IANA $INFO $EXCLUDE $OPT_URLS);
 use warnings;
+
+exit(1) unless GetOptions('urls' => \$OPT_URLS);
 
 $| = 1;
 
@@ -195,16 +199,23 @@ sub check_tld {
             verify_hostname => undef,
         }
     );
-
     foreach my $url (@urls) {
-        $url->path_segments(grep { length > 0 } $url->path_segments, $domain ? (q{domain}, $domain) : q{help});
+        my $test_url = dclone($url);
+        $test_url->path_segments(grep { length > 0 } $url->path_segments, $domain ? (q{domain}, $domain) : q{help});
 
-        say STDERR sprintf('checking %s...', $url);
-        my $result = $ua->request(GET($url, connection => 'close'));
+        say STDERR sprintf('checking %s...', $test_url);
+        my $result = $ua->request(GET($test_url, connection => 'close'));
 
         if (200 == $result->code && $result->header('content-type') =~ /^application\/(rdap\+)?json/i) {
-            say STDERR sprintf('%s returned an RDAP response!', $url);
-            say STDOUT $tld;
+            say STDERR sprintf('%s returned an RDAP response!', $test_url);
+
+            if ($OPT_URLS) {
+                say STDOUT $tld.','.$url->as_string;
+
+            } else {
+                say STDOUT $tld;
+
+            }
 
             return;
         }
