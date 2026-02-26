@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 use Cwd;
-use Data::Mirror qw(mirror_file mirror_csv);
+use Data::Mirror qw(mirror_file mirror_csv mirror_json);
 use DateTime;
 use Encode;
 use File::Slurp;
@@ -15,6 +15,17 @@ use open qw(:utf8);
 use feature qw(say);
 use utf8;
 use strict;
+
+#
+# these are the base URLs of the largest gTLDs, which are the ones that are most
+# likely to have records for ICANN-accredited registrars
+#
+my @RDAP_SERVERS = qw(
+    https://rdap.verisign.com/com/v1/
+    https://rdap.publicinterestregistry.org/rdap/
+    https://rdap.nic.biz/
+    https://rdap.centralnic.com/xyz/
+);
 
 say STDERR 'updating registrar RDAP data...';
 
@@ -94,81 +105,146 @@ die($@) if ($@);
 
 say STDERR 'generating RDAP records for registrars...';
 
-foreach my $rar (sort { $a->{'ianaNumber'} <=> $b->{'ianaNumber'} } @{$rars}) {
-    my $id = $rar->{'ianaNumber'};
+foreach my $id (sort { $a <=> $b } keys(%{$urls})) {
+    my $rar = [ grep { $id == $_->{'ianaNumber'} } @{$rars} ]->[0];
+    next unless ($rar);
 
-	my $data = {
-		'objectClassName' => 'entity',
-		'handle' => sprintf('%s-iana', $id),
-        'roles' => [],
-		'publicIds' => [ { 'type' => 'IANA Registrar ID', 'identifier' => sprintf("%u", $id) }],
-		'rdapConformance' => [ 'rdap_level_0' ],
-		'status' => [ 'active' ],
-		'vcardArray' => [ 'vcard', [ [
-			'version',
-			{},
-			'text',
-			'4.0',
-		] ] ],
-	};
+    my $handle = sprintf('%s-iana', $id);
 
-	if ($rar->{'publicContact'}->{'name'}) {
-		push(@{$data->{'vcardArray'}->[1]}, [ 'fn', {}, 'text', $rar->{'publicContact'}->{'name'} ]);
-		push(@{$data->{'vcardArray'}->[1]}, [ 'org', {}, 'text', $rar->{'name'} ]);
+    my $self = "https://registrars.rdap.org/entity/".$handle;
 
-	} else {
-		push(@{$data->{'vcardArray'}->[1]}, [ 'fn', {}, 'text', $rar->{'name'} ]);
+    my (@vcard, @entities, @remarks, @links);
+    SERVER: foreach my $server (@RDAP_SERVERS) {
+        my $url = URI->new_abs('entity/'.$id, $server);
 
-	}
+        my $rdap;
+        eval {
+            $rdap = mirror_json($url);
+        };
 
-	if ($rar->{'publicContact'}->{'phone'}) {
-		$rar->{'publicContact'}->{'phone'} =~ s/^="//g;
-		$rar->{'publicContact'}->{'phone'} =~ s/"$//g;
-		push(@{$data->{'vcardArray'}->[1]}, [ 'tel', {} , 'text', $rar->{'publicContact'}->{'phone'} ]);
-	};
+        if ($rdap) {
+            @vcard = @{$rdap->{vcardArray}->[1] || []};
+            push(@entities, @{$rdap->{entities} || []});
 
-	push(@{$data->{'vcardArray'}->[1]}, [ 'email', {} , 'text', $rar->{'publicContact'}->{'email'} ]) if ($rar->{'publicContact'}->{'email'});
-	push(@{$data->{'vcardArray'}->[1]}, [ 'adr', {} , 'text', [ '', '', '', '', '', '', $rar->{'country'} ] ]) if ($rar->{'country'});
+            push(@remarks, {
+                "title" => "Data Source",
+                "description" => [ sprintf("The contact information in this record was retrieved from %s. Please follow the 'canonical' link to see the original record.", $url->authority) ],
+            });
 
-	if ($rar->{'url'}) {
-		push(@{$data->{'links'}}, {
-			'title' => "Registrar's Website",
-			'rel'   => 'related',
-			'value' => $rar->{'url'},
-			'href'  => $rar->{'url'},
-		});
-	}
-
-    if ($urls->{$id}) {
-		push(@{$data->{'links'}}, {
-			'title' => "Registrar's RDAP Base URL",
-			'rel'   => 'related',
-			'value' => $urls->{$id},
-			'href'  => $urls->{$id},
-		});
+            push(@links, {
+                "rel"   => "canonical",
+                "title" => "Original source for this record",
+                "type"  => "application/rdap+json",
+                "value" => $self,
+                "href"  => $url->as_string,
+            });
+            last SERVER;
+        }
     }
 
-	$data->{'notices'} = [ $NOTICE ];
+    if (scalar(@vcard) < 1) {
+        #
+        # no record found at a public RDAP server, construct a vcard from the
+        # ICANN data
+        #
+        push(@vcard, [ 'version', {}, 'text', '4.0' ]);
 
-	$data->{'events'} = [ {
-		'eventAction' => 'last update of RDAP database',
-		'eventDate' => $updateTime,
-	} ];
+        if ($rar->{'publicContact'}->{'name'}) {
+            push(@vcard, [ 'fn', {}, 'text', $rar->{'publicContact'}->{'name'} ]);
+            push(@vcard, [ 'org', {}, 'text', $rar->{'name'} ]);
 
-	#
-	# add some links
-	#
-	push(@{$data->{'links'}}, {
-		'title'	=> 'About RDAP',
-		'rel'	=> 'related',
-		'value'	=> 'https://about.rdap.org',
-		'href'	=> 'https://about.rdap.org',
-	});
+        } else {
+            push(@vcard, [ 'fn', {}, 'text', $rar->{'name'} ]);
 
-	#
-	# write RDAP object to disk
-	#
-	my $jfile = sprintf('%s/%s.json', $dir, $data->{'handle'});
+        }
+
+        if ($rar->{'publicContact'}->{'phone'}) {
+            $rar->{'publicContact'}->{'phone'} =~ s/^="//g;
+            $rar->{'publicContact'}->{'phone'} =~ s/"$//g;
+            push(@vcard, [ 'tel', {} , 'text', $rar->{'publicContact'}->{'phone'} ]);
+        };
+
+        push(@vcard, [ 'email', {} , 'text', $rar->{'publicContact'}->{'email'} ]) if ($rar->{'publicContact'}->{'email'});
+        push(@vcard, [ 'adr', {} , 'text', [ '', '', '', '', '', '', $rar->{'country'} ] ]) if ($rar->{'country'});
+
+        push(@remarks, {
+            "title"         => "Data Source",
+            "description"   => [ "The contact information in this record was retrieved from ICANN." ],
+        });
+    }
+
+    push(@links, {
+        "rel"   => "self",
+        "value" => $self,
+        "href"  => $self,
+    });
+
+    push(@links, {
+        "rel"   => "collection",
+        "value" => $self,
+        "title" => "Official ICANN Registrar List",
+        "href"  => ICANN_REGISTRAR_LIST_URL,
+    });
+
+    push(@links, {
+        "rel"   => "collection",
+        "value" => $self,
+        "title" => "IANA Registrar IDs",
+        "href"  => IANA_REGISTRAR_LIST_URL,
+    });
+
+    my $data = {
+        'objectClassName'   => 'entity',
+        'handle'            => $handle,
+        'roles'             => [],
+        'publicIds'         => [ { 'type' => 'IANA Registrar ID', 'identifier' => sprintf("%u", $id) }],
+        'rdapConformance'   => [ 'rdap_level_0' ],
+        'status'            => [ 'active' ],
+        'vcardArray'        => [ 'vcard', \@vcard ],
+        'entities'          => \@entities,
+        'remarks'           => \@remarks,
+        'links'             => \@links,
+    };
+
+    if ($rar->{'url'}) {
+        push(@{$data->{'links'}}, {
+            'title' => "Registrar's Website",
+            'rel'   => 'related',
+            "value" => $self,
+            'href'  => $rar->{'url'},
+        });
+    }
+
+    if ($urls->{$id}) {
+        push(@{$data->{'links'}}, {
+            'title' => "Registrar's RDAP Base URL",
+            'rel'   => 'related',
+            "value" => $self,
+            'href'  => $urls->{$id},
+        });
+    }
+
+    $data->{'notices'} = [ $NOTICE ];
+
+    $data->{'events'} = [ {
+        'eventAction'   => 'last update of RDAP database',
+        'eventDate'     => $updateTime,
+    } ];
+
+    #
+    # add some links
+    #
+    push(@{$data->{'links'}}, {
+        'title' => 'About RDAP',
+        'rel'   => 'related',
+        "value" => $self,
+        'href'  => 'https://about.rdap.org',
+    });
+
+    #
+    # write RDAP object to disk
+    #
+    my $jfile = sprintf('%s/%s.json', $dir, $data->{'handle'});
 
     if (!write_file($jfile, {'binmode' => ':utf8'}, $json->encode($data))) {
         printf(STDERR "Unable to write data to '%s': %s\n", $jfile, $!);
