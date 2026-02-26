@@ -6,6 +6,11 @@ use Encode;
 use File::Slurp;
 use HTML5::DOM;
 use JSON::XS;
+use URI;
+use constant {
+    ICANN_REGISTRAR_LIST_URL    => 'https://www.icann.org/en/contracted-parties/accredited-registrars/list-of-accredited-registrars',
+    IANA_REGISTRAR_LIST_URL     => 'https://www.iana.org/assignments/registrar-ids/registrar-ids-1.csv',
+};
 use open qw(:utf8);
 use feature qw(say);
 use utf8;
@@ -44,7 +49,7 @@ my $all = {
 my $file;
 
 eval {
-    $file = mirror_file('https://www.icann.org/en/contracted-parties/accredited-registrars/list-of-accredited-registrars');
+    $file = mirror_file(ICANN_REGISTRAR_LIST_URL);
 };
 
 die($@) if ($@);
@@ -77,7 +82,7 @@ if (scalar(@{$rars}) < 1) {
 say STDERR 'retrieving IANA registry...';
 my $urls = {};
 eval {
-    my $rows = mirror_csv('https://www.iana.org/assignments/registrar-ids/registrar-ids-1.csv');
+    my $rows = mirror_csv(IANA_REGISTRAR_LIST_URL);
 
     shift(@{$rows});
     foreach my $row (@{$rows}) {
