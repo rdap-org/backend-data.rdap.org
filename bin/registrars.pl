@@ -34,15 +34,15 @@ $Data::Mirror::TTL_SECONDS = 3600;
 my $dir = $ARGV[0] || getcwd();
 
 if (!-e $dir || !-d $dir) {
-	printf(STDERR "Error: %s doesn't exist, please create it first\n");
-	exit(1);
+    printf(STDERR "Error: %s doesn't exist, please create it first\n");
+    exit(1);
 }
 
 my $json = JSON::XS->new->utf8->pretty->canonical;
 
 my $all = {
-  'rdapConformance' => [ 'rdap_level_0' ],
-  'notices' => [ $NOTICE ],
+  'rdapConformance'     => [ 'rdap_level_0' ],
+  'notices'             => [ $NOTICE ],
   'entitySearchResults' => [],
 };
 
