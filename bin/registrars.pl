@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 use Cwd;
 use Data::Mirror qw(mirror_file mirror_csv);
 use DateTime;
