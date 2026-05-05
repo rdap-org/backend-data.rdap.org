@@ -14,4 +14,6 @@ RUN apt -qqq install \
     libyaml-perl \
     gcc
 
-RUN cpanm -qn Data::Mirror Object::Anon HTML5::DOM
+RUN cpanm -qn Data::Mirror Object::Anon
+
+RUN cpanm -vn HTML5::DOM
