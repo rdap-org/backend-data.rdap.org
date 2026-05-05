@@ -12,6 +12,7 @@ RUN apt -qqq install \
     libtext-csv-xs-perl \
     libxml-libxml-perl \
     libyaml-perl \
+    libcrypt-dev \
     gcc
 
 RUN cpanm -qn Data::Mirror Object::Anon
