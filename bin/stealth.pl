@@ -1,12 +1,10 @@
 #!/usr/bin/env perl
 use Data::Mirror qw(mirror_str mirror_json mirror_file);
 use Data::Tranco;
-use DateTime;
 use Domain::PublicSuffix;
 use Email::Address::XS;
 use Getopt::Long;
 use HTTP::Request::Common;
-use JSON::XS;
 use LWP::UserAgent;
 use List::Util qw(uniq);
 use Net::RDAP;
@@ -21,10 +19,10 @@ use constant {
 use feature qw(say);
 use strict;
 use open qw(:encoding(utf8));
-use vars qw($KNOWN $KNOWN_URLS @PATHS $PSL @TLDs $IANA $INFO $EXCLUDE $BOOTSTRAP $OPT_BOOTSTRAP $FOUND);
+use vars qw($KNOWN $KNOWN_URLS @PATHS $PSL @TLDs $IANA $INFO $EXCLUDE $OPT_URLS);
 use warnings;
 
-exit(1) unless GetOptions('bootstrap' => \$OPT_BOOTSTRAP);
+exit(1) unless GetOptions('urls' => \$OPT_URLS);
 
 $| = 1;
 
@@ -108,9 +106,8 @@ $INFO = { map { lc($_->name->name) => $_ } Net::RDAP::SearchResult->new(mirror_j
 #
 # generate an exclusion list of TLDs that have a bootstrap entry already
 #
-$BOOTSTRAP = mirror_json(RDAP_URL);
 $EXCLUDE = {};
-foreach my $service (@{ $BOOTSTRAP->{services} }) {
+foreach my $service (@{ mirror_json(RDAP_URL)->{services} }) {
     foreach my $tld (map { lc } @{$service->[0]}) {
         $EXCLUDE->{$tld} = 1;
     }
@@ -118,20 +115,8 @@ foreach my $service (@{ $BOOTSTRAP->{services} }) {
 
 say STDERR 'checking TLDs...';
 
-$FOUND = {};
-
 foreach my $tld (grep { !exists($EXCLUDE->{$_}) } @TLDs) {
     check_tld($tld);
-}
-
-if ($OPT_BOOTSTRAP) {
-    foreach my $tld (keys(%{$FOUND})) {
-        push(@{$BOOTSTRAP->{services}}, [[$tld], [$FOUND->{$tld}]]);
-    }
-
-    $BOOTSTRAP->{description} = "RDAP bootstrap file for Domain Name System registrations (including Stealth RDAP servers)";
-    $BOOTSTRAP->{publication} = "".DateTime->now;
-    say JSON::XS->new->utf8->canonical->pretty->encode($BOOTSTRAP);
 }
 
 say STDERR 'done';
@@ -215,7 +200,7 @@ sub check_tld {
         }
     );
     foreach my $url (@urls) {
-        my $test_url = dclone($url->canonical);
+        my $test_url = dclone($url);
         $test_url->path_segments(grep { length > 0 } $url->path_segments, $domain ? (q{domain}, $domain) : q{help});
 
         say STDERR sprintf('checking %s...', $test_url);
@@ -224,8 +209,8 @@ sub check_tld {
         if (200 == $result->code && $result->header('content-type') =~ /^application\/(rdap\+)?json/i) {
             say STDERR sprintf('%s returned an RDAP response!', $test_url);
 
-            if ($OPT_BOOTSTRAP) {
-                $FOUND->{$tld} = $url->canonical->as_string;
+            if ($OPT_URLS) {
+                say STDOUT $tld.','.$url->as_string;
 
             } else {
                 say STDOUT $tld;
