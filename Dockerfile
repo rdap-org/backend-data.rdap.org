@@ -13,6 +13,7 @@ RUN apt -qqq install \
     libxml-libxml-perl \
     libyaml-perl \
     libcrypt-dev \
+    libc6-dev \
     gcc
 
 RUN cpanm -qn Data::Mirror Object::Anon
