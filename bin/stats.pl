@@ -7,7 +7,7 @@ use JSON::XS;
 use LWP::UserAgent;
 use constant {
     STATS_URL               => q{https://rdap.org/stats},
-    ALERTABLE_QUERY_RATE    => 150,
+    ALERTABLE_QUERY_RATE    => 200,
     PUSHOVER_URL            => q{https://api.pushover.net/1/messages.json},
 };
 use vars qw(@SERIES $DB $UA);
