@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 use Cwd;
-use Data::Mirror qw(mirror_file mirror_csv mirror_json);
+use Data::Mirror qw(mirror_file mirror_csv mirror_json mirror_fh);
 use DateTime;
 use Encode;
 use File::Slurp;
@@ -8,13 +8,15 @@ use HTML5::DOM;
 use JSON::XS;
 use URI;
 use constant {
-    ICANN_REGISTRAR_LIST_URL    => 'https://www.icann.org/en/contracted-parties/accredited-registrars/list-of-accredited-registrars',
+    ICANN_REGISTRAR_LIST_URL    => 'https://www.icann.org/en/contracted-parties/accredited-registrars/list-of-accredited-registrars/csvdownload',
     IANA_REGISTRAR_LIST_URL     => 'https://www.iana.org/assignments/registrar-ids/registrar-ids-1.csv',
 };
 use open qw(:utf8);
 use feature qw(say);
 use utf8;
 use strict;
+
+$Data::Mirror::UA->agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0');
 
 #
 # these are the base URLs of the largest gTLDs, which are the ones that are most
@@ -57,37 +59,14 @@ my $all = {
   'entitySearchResults' => [],
 };
 
-my $file;
+say STDERR 'retrieving registrar list...';
 
-eval {
-    $file = mirror_file(ICANN_REGISTRAR_LIST_URL);
-};
+my $rars = [];
 
-die($@) if ($@);
-
-say STDERR 'retrieved registrar list, attempting to parse';
-
-my $parser = HTML5::DOM->new;
-
-my $doc = $parser->parse(join('', read_file($file)));
-
-say STDERR 'searching for embedded JSON...';
-
-my $rars;
-eval {
-    my $data = [grep { 'ng-state' eq $_->attr('id') && 'application/json' eq $_->attr('type') } @{$doc->getElementsByTagName('script')}]->[0]->textContent;
-    $data =~ s/\&q;/"/g;
-
-    my $object = $json->decode(Encode::encode_utf8($data));
-
-    $rars = $object->{'accredited-registrars-{"languageTag":"en","siteLanguageTag":"en","slug":"contracted-parties/accredited-registrars/list-of-accredited-registrars"}'}->{'data'}->{'accreditedRegistrarsOperations'}->{'registrars'};
-};
-
-die($@) if ($@);
-
-if (scalar(@{$rars}) < 1) {
-    say STDERR 'no registrars found, the page format may have changed...';
-    exit(1);
+my $fh = mirror_fh(ICANN_REGISTRAR_LIST_URL);
+while (!$fh->eof) {
+    my $row = $Data::Mirror::CSV->getline($fh);
+    push(@{$rars}, $row) if ($row);
 }
 
 say STDERR 'retrieving IANA registry...';
@@ -106,7 +85,7 @@ die($@) if ($@);
 say STDERR 'generating RDAP records for registrars...';
 
 foreach my $id (sort { $a <=> $b } keys(%{$urls})) {
-    my $rar = [ grep { $id == $_->{'ianaNumber'} } @{$rars} ]->[0];
+    my $rar = [ grep { $id == $_->[1] } @{$rars} ]->[0];
     next unless ($rar);
 
     my $handle = sprintf('%s-iana', $id);
@@ -149,23 +128,35 @@ foreach my $id (sort { $a <=> $b } keys(%{$urls})) {
         #
         push(@vcard, [ 'version', {}, 'text', '4.0' ]);
 
-        if ($rar->{'publicContact'}->{'name'}) {
-            push(@vcard, [ 'fn', {}, 'text', $rar->{'publicContact'}->{'name'} ]);
-            push(@vcard, [ 'org', {}, 'text', $rar->{'name'} ]);
+        my @parts = split(/ +/, $rar->[3]);
+
+        my $email = pop(@parts);
+
+        my $phone;
+        while (1) {
+            if ($parts[-1] =~ /^\+?[\d\-]+$/) {
+                $phone = pop(@parts).' '.$phone;
+
+            } else {
+                last;
+
+            }
+        }
+
+        my $name = join(' ', @parts);
+
+        if ($name) {
+            push(@vcard, [ 'fn', {}, 'text', $name ]);
+            push(@vcard, [ 'org', {}, 'text', $rar->[0] ]);
 
         } else {
-            push(@vcard, [ 'fn', {}, 'text', $rar->{'name'} ]);
+            push(@vcard, [ 'fn', {}, 'text', $rar->[0] ]);
 
         }
 
-        if ($rar->{'publicContact'}->{'phone'}) {
-            $rar->{'publicContact'}->{'phone'} =~ s/^="//g;
-            $rar->{'publicContact'}->{'phone'} =~ s/"$//g;
-            push(@vcard, [ 'tel', {} , 'text', $rar->{'publicContact'}->{'phone'} ]);
-        };
-
-        push(@vcard, [ 'email', {} , 'text', $rar->{'publicContact'}->{'email'} ]) if ($rar->{'publicContact'}->{'email'});
-        push(@vcard, [ 'adr', {} , 'text', [ '', '', '', '', '', '', $rar->{'country'} ] ]) if ($rar->{'country'});
+        push(@vcard, [ 'tel',   {} , 'text', $phone ]) if ($phone);
+        push(@vcard, [ 'email', {} , 'text', $email ]) if ($email);
+        push(@vcard, [ 'adr',   {} , 'text', [ '', '', '', '', '', '', $rar->[2] ] ]) if ($rar->[2]);
 
         push(@remarks, {
             "title"         => "Data Source",
@@ -206,12 +197,12 @@ foreach my $id (sort { $a <=> $b } keys(%{$urls})) {
         'links'             => \@links,
     };
 
-    if ($rar->{'url'}) {
+    if ($rar->[4]) {
         push(@{$data->{'links'}}, {
             'title' => "Registrar's Website",
             'rel'   => 'related',
             "value" => $self,
-            'href'  => $rar->{'url'},
+            'href'  => $rar->[4],
         });
     }
 
